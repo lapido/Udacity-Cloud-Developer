@@ -1,6 +1,8 @@
 import express from 'express';
 import bodyParser from 'body-parser';
-import {filterImageFromURL, deleteLocalFiles} from './util/util';
+import {filterImageFromURL, deleteLocalFiles, isValidUrl} from './util/util';
+import fs from 'fs';
+import path from 'path';
 
 (async () => {
 
@@ -27,7 +29,47 @@ import {filterImageFromURL, deleteLocalFiles} from './util/util';
   // RETURNS
   //   the filtered image file [!!TIP res.sendFile(filteredpath); might be useful]
 
-  /**************************************************************************** */
+  app.get( "/filteredimage", async ( req, res ) => {
+
+    const imageUrl = req.query.image_url;
+    if (!imageUrl) {
+      return res.status(400).send({ message: 'Image Url is required' });
+    }
+
+    //checks if imageUrl is a valid url
+    const isValidurl = await isValidUrl(imageUrl);
+    if (!isValidurl) {
+      return res.status(400).send({ message: 'Image Url is incorrect' });
+    }
+    
+    const outputPath = await filterImageFromURL(imageUrl);
+    
+    return res.sendFile(outputPath, function(err){
+      if (!err) {
+        const tempDirectory = path.join(__dirname, '/util/tmp');
+
+        fs.readdir(tempDirectory, function(err, files) {
+
+          if (err) {
+            return console.log('Unable to scan directory: ' + err);
+          }
+          const filePathArray: string[] = [];
+
+          files.forEach(function (file) {
+            const filePath = tempDirectory + '/' + file;
+            filePathArray.push(filePath);
+          });
+
+          return deleteLocalFiles(filePathArray)
+            .then(x => {
+              console.log('Action completed => Local files deleted')
+            })
+        }) 
+      }
+    })
+
+  } );
+  
 
   //! END @TODO1
   
@@ -36,7 +78,6 @@ import {filterImageFromURL, deleteLocalFiles} from './util/util';
   app.get( "/", async ( req, res ) => {
     res.send("try GET /filteredimage?image_url={{}}")
   } );
-  
 
   // Start the Server
   app.listen( port, () => {
